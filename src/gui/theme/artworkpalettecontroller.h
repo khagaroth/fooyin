@@ -37,6 +37,15 @@ enum class ArtworkColourMode : uint8_t
     Off = 0,
     Accent,
     Tonal,
+    Adaptive,
+};
+
+struct ArtworkColours
+{
+    QColor accent;
+    float lightness{0.0F};
+
+    bool operator==(const ArtworkColours& other) const = default;
 };
 
 class ArtworkPaletteController : public QObject
@@ -54,13 +63,13 @@ Q_SIGNALS:
 
 private:
     void reloadCover();
-    void setColour(const QColor& colour);
+    void setColours(const ArtworkColours& colours);
 
     CoverRepository* m_covers;
     PlayerController* m_player;
     ArtworkColourMode m_mode;
     quint64 m_requestId;
-    QColor m_colour;
-    std::map<QByteArray, QColor> m_colourCache;
+    ArtworkColours m_colours;
+    std::map<QByteArray, ArtworkColours> m_colourCache;
 };
 } // namespace Fooyin

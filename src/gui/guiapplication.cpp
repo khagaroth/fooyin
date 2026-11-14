@@ -229,7 +229,10 @@ std::pair<QString, QString> resolveIconThemes(SettingsManager* settings)
 void applyInitialIconThemes(SettingsManager* settings)
 {
     const auto [primaryTheme, fallbackTheme] = resolveIconThemes(settings);
-    Gui::setThemeIconOverrides(primaryTheme, fallbackTheme);
+    Gui::setThemeIconOverrides(primaryTheme, fallbackTheme,
+                               settings
+                                   && static_cast<IconThemeOption>(settings->value<Settings::Gui::IconTheme>())
+                                          == IconThemeOption::AutoDetect);
 }
 
 Application* prepareCoreForGuiApplication(Application* core)
@@ -1972,7 +1975,9 @@ void GuiApplication::handleSystemThemeChanged()
 bool GuiApplication::setIconTheme() const
 {
     const auto [primaryTheme, fallbackTheme] = resolveIconThemes(m_settings);
-    return Gui::setThemeIconOverrides(primaryTheme, fallbackTheme);
+    return Gui::setThemeIconOverrides(primaryTheme, fallbackTheme,
+                                      static_cast<IconThemeOption>(m_settings->value<Settings::Gui::IconTheme>())
+                                          == IconThemeOption::AutoDetect);
 }
 
 void GuiApplication::updateApplicationIcon()

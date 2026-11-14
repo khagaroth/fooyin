@@ -123,6 +123,14 @@ void PlaylistControl::populateContextMenu(QMenu* menu)
                             });
 }
 
+void PlaylistControl::changeEvent(QEvent* event)
+{
+    FyWidget::changeEvent(event);
+    if(event->type() == QEvent::PaletteChange) {
+        setMode(m_playerController->playMode());
+    }
+}
+
 void PlaylistControl::contextMenuEvent(QContextMenuEvent* event)
 {
     auto* menu = new QMenu(this);
@@ -265,23 +273,23 @@ void PlaylistControl::setupMenus()
 void PlaylistControl::setMode(Playlist::PlayModes mode) const
 {
     if(mode & (Playlist::RepeatPlaylist | Playlist::RepeatAlbum)) {
-        m_repeat->setIcon(
-            Utils::changePixmapColour(Gui::iconFromTheme(Constants::Icons::Repeat).pixmap({128, 128}), iconColour()));
+        m_repeat->setIcon(Utils::changePixmapColour(
+            Gui::iconFromTheme(Constants::Icons::Repeat, palette()).pixmap({128, 128}), iconColour()));
     }
     else if(mode & Playlist::RepeatTrack) {
         m_repeat->setIcon(Utils::changePixmapColour(
-            Gui::iconFromTheme(Constants::Icons::RepeatTrack).pixmap({128, 128}), iconColour()));
+            Gui::iconFromTheme(Constants::Icons::RepeatTrack, palette()).pixmap({128, 128}), iconColour()));
     }
     else {
-        m_repeat->setIcon(Gui::iconFromTheme(Constants::Icons::Repeat));
+        m_repeat->setIcon(Gui::iconFromTheme(Constants::Icons::Repeat, palette()));
     }
 
     if(mode & (Playlist::ShuffleTracks | Playlist::ShuffleAlbums | Playlist::Random)) {
-        m_shuffle->setIcon(
-            Utils::changePixmapColour(Gui::iconFromTheme(Constants::Icons::Shuffle).pixmap({128, 128}), iconColour()));
+        m_shuffle->setIcon(Utils::changePixmapColour(
+            Gui::iconFromTheme(Constants::Icons::Shuffle, palette()).pixmap({128, 128}), iconColour()));
     }
     else {
-        m_shuffle->setIcon(Gui::iconFromTheme(Constants::Icons::Shuffle));
+        m_shuffle->setIcon(Gui::iconFromTheme(Constants::Icons::Shuffle, palette()));
     }
 }
 

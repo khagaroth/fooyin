@@ -119,6 +119,14 @@ ToolbarManager::ToolbarManager(QMainWindow* window, QMenuBar* menuBar, ActionMan
     m_settings->subscribe<Settings::Gui::LayoutEditing>(this, [this](bool editing) { setEditing(editing); });
     m_settings->subscribe<Settings::Gui::MenuBarMovable>(this, [this](bool movable) { setMenuInToolbar(movable); });
     m_settings->subscribe<Settings::Gui::ToolbarsLocked>(this, [this](bool locked) { setToolbarsLocked(locked); });
+    m_settings->subscribe<Settings::Gui::ResolvedAppStyle>(this, [this]() {
+        for(const auto& entry : m_toolbars) {
+            if(entry.toolbar) {
+                updateToolbarPalette(entry.toolbar);
+            }
+        }
+    });
+
     setMenuInToolbar(m_settings->value<Settings::Gui::MenuBarMovable>());
     setToolbarsLocked(m_settings->value<Settings::Gui::ToolbarsLocked>());
     setEditing(m_settings->value<Settings::Gui::LayoutEditing>());
@@ -276,8 +284,20 @@ void ToolbarManager::setMenuVisible(bool visible)
 
 bool ToolbarManager::eventFilter(QObject* watched, QEvent* event)
 {
+    if(event->type() == QEvent::PaletteChange || event->type() == QEvent::StyleChange) {
+        if(auto* toolbar = qobject_cast<QToolBar*>(watched); toolbar && entryFor(toolbar)) {
+            QMetaObject::invokeMethod(
+                this,
+                [this, toolbar = QPointer{toolbar}]() {
+                    if(toolbar) {
+                        updateToolbarPalette(toolbar);
+                    }
+                },
+                Qt::QueuedConnection);
+        }
+    }
     if(event->type() == QEvent::ContextMenu) {
-        auto* contextMenuEvent = static_cast<QContextMenuEvent*>(event);
+        const auto* contextMenuEvent = static_cast<QContextMenuEvent*>(event);
         if(auto* toolbar = toolbarFor(watched)) {
             if(contextMenuEvent->reason() == QContextMenuEvent::Mouse
                && QApplication::mouseButtons() & Qt::LeftButton) {
@@ -355,6 +375,47 @@ void ToolbarManager::updateMenuVisibility()
     m_menuToolbar->setVisible(m_menuVisible && m_menuInToolbar);
 }
 
+void ToolbarManager::updateToolbarPalette(QToolBar* toolbar)
+{
+    const auto* entry = entryFor(toolbar);
+    if(!entry) {
+        return;
+    }
+
+    auto palette          = toolbar->palette();
+    const auto appPalette = QApplication::palette();
+    bool nativeHeader{false};
+    for(const auto group : {QPalette::Active, QPalette::Inactive, QPalette::Disabled}) {
+        if(palette.color(group, QPalette::Window) == appPalette.color(group, QPalette::Window)) {
+            continue;
+        }
+
+        nativeHeader = true;
+        // Native styles may replace only Window and WindowText in their header palette
+        for(const auto role : {QPalette::Button, QPalette::Base, QPalette::AlternateBase}) {
+            palette.setColor(group, role, palette.color(group, QPalette::Window));
+        }
+        for(const auto role : {QPalette::Text, QPalette::ButtonText, QPalette::PlaceholderText}) {
+            palette.setColor(group, role, palette.color(group, QPalette::WindowText));
+        }
+
+        const auto highlight = palette.color(group, QPalette::Highlight);
+        palette.setColor(group, QPalette::Highlight,
+                         QColor::fromHslF(highlight.hslHueF(), highlight.hslSaturationF(),
+                                          palette.color(group, QPalette::WindowText).lightnessF(), highlight.alphaF()));
+        palette.setColor(group, QPalette::HighlightedText, palette.color(group, QPalette::Window));
+#if QT_VERSION >= QT_VERSION_CHECK(6, 6, 0)
+        palette.setColor(group, QPalette::Accent, palette.color(group, QPalette::Highlight));
+#endif
+    }
+
+    for(const auto& item : entry->items) {
+        if(item.widget) {
+            item.widget->setPalette(nativeHeader ? palette : QPalette{});
+        }
+    }
+}
+
 void ToolbarManager::addToolbar(const QString& key, const QString& id, const QJsonObject& layout)
 {
     if(!m_widgetProvider->supportsToolbar(key)) {
@@ -419,6 +480,7 @@ bool ToolbarManager::insertWidget(QToolBar* toolbar, const QString& key, QAction
     entry->items.insert(itemPosition, {.key = key, .action = action, .widget = widget, .savedWidget = {}});
     updateAllowedAreas(entry);
     widget->finalise();
+    updateToolbarPalette(toolbar);
     Q_EMIT widgetsChanged();
     return true;
 }

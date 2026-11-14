@@ -156,6 +156,8 @@ private:
     QPushButton* m_exportButton;
     QTabWidget* m_themeDetails;
     QLabel* m_colourHint;
+    QLabel* m_basicStyleHint;
+    QLabel* m_advancedStyleHint;
 
     QString m_defaultTheme;
     std::map<PaletteKey, ColourButton*> m_colourMapping;
@@ -179,6 +181,11 @@ GuiColoursPageWidget::GuiColoursPageWidget(ThemeRegistry* themeRegistry, Setting
     , m_colourHint{new HintLabel(tr("Theme colours are disabled when using a Windows style. Select Fusion as the "
                                     "interface style to customise colours."),
                                  this)}
+    , m_basicStyleHint{new HintLabel(
+          tr("Some styles may not fully support custom colours. Select Fusion in Interface → General for more "
+             "consistent results."),
+          this)}
+    , m_advancedStyleHint{new HintLabel(m_basicStyleHint->text(), this)}
     , m_defaultTheme{tr("System default")}
 {
     QObject::connect(m_themesList, &QListWidget::currentItemChanged, this, &GuiColoursPageWidget::loadTheme);
@@ -221,7 +228,9 @@ GuiColoursPageWidget::GuiColoursPageWidget(ThemeRegistry* themeRegistry, Setting
     addColourOption(baseLayout, tr("Button (Background)"), QPalette::Button);
     addColourOption(baseLayout, tr("Button (Foreground)"), QPalette::ButtonText);
 
-    baseLayout->setRowStretch(baseLayout->rowCount(), 1);
+    const int baseStretchRow = baseLayout->rowCount();
+    baseLayout->setRowStretch(baseStretchRow, 1);
+    baseLayout->addWidget(m_basicStyleHint, baseStretchRow + 1, 0, 1, baseLayout->columnCount());
 
     auto* advancedColours = new QWidget(this);
     auto* advancedLayout  = new QGridLayout(advancedColours);
@@ -243,7 +252,9 @@ GuiColoursPageWidget::GuiColoursPageWidget(ThemeRegistry* themeRegistry, Setting
 
     ColourButton::alignLabels(m_colourMapping | std::views::values);
 
-    advancedLayout->setRowStretch(advancedLayout->rowCount(), 1);
+    const int advancedStretchRow = advancedLayout->rowCount();
+    advancedLayout->setRowStretch(advancedStretchRow, 1);
+    advancedLayout->addWidget(m_advancedStyleHint, advancedStretchRow + 1, 0, 1, advancedLayout->columnCount());
 
     auto* fonts       = new QWidget(this);
     auto* fontsLayout = new QGridLayout(fonts);
@@ -405,6 +416,9 @@ void GuiColoursPageWidget::updateColourOptionState() const
         m_themeDetails->setTabToolTip(index, tooltip);
     }
     m_colourHint->setVisible(!enabled);
+    const bool showStyleHint = enabled && styleName.compare("Fusion"_L1, Qt::CaseInsensitive) != 0;
+    m_basicStyleHint->setVisible(showStyleHint);
+    m_advancedStyleHint->setVisible(showStyleHint);
 }
 
 void GuiColoursPageWidget::updateFontOptions() const

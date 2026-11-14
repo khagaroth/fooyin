@@ -202,6 +202,14 @@ void PlayerControl::populateContextMenu(QMenu* menu)
                             });
 }
 
+void PlayerControl::changeEvent(QEvent* event)
+{
+    FyWidget::changeEvent(event);
+    if(event->type() == QEvent::PaletteChange) {
+        updateIcons();
+    }
+}
+
 void PlayerControl::contextMenuEvent(QContextMenuEvent* event)
 {
     auto* menu = new QMenu(this);
@@ -231,12 +239,12 @@ void PlayerControl::updateOrientation()
 
 void PlayerControl::updateIcons() const
 {
-    m_stop->setIcon(Gui::iconFromTheme(Constants::Icons::Stop));
-    m_prev->setIcon(Gui::iconFromTheme(Constants::Icons::Prev));
-    m_pause->setIcon(Gui::iconFromTheme(Constants::Icons::Pause));
-    m_play->setIcon(Gui::iconFromTheme(Constants::Icons::Play));
-    m_next->setIcon(Gui::iconFromTheme(Constants::Icons::Next));
-    m_randomTrack->setIcon(Gui::iconFromTheme(Constants::Icons::RandomPlay));
+    m_stop->setIcon(Gui::iconFromTheme(Constants::Icons::Stop, palette()));
+    m_prev->setIcon(Gui::iconFromTheme(Constants::Icons::Prev, palette()));
+    m_pause->setIcon(Gui::iconFromTheme(Constants::Icons::Pause, palette()));
+    m_play->setIcon(Gui::iconFromTheme(Constants::Icons::Play, palette()));
+    m_next->setIcon(Gui::iconFromTheme(Constants::Icons::Next, palette()));
+    m_randomTrack->setIcon(Gui::iconFromTheme(Constants::Icons::RandomPlay, palette()));
     stateChanged(m_playerController->playState());
 }
 
@@ -244,13 +252,13 @@ void PlayerControl::stateChanged(Player::PlayState state) const
 {
     switch(state) {
         case Player::PlayState::Stopped:
-            m_playPause->setIcon(Gui::iconFromTheme(Constants::Icons::Play));
+            m_playPause->setIcon(Gui::iconFromTheme(Constants::Icons::Play, palette()));
             break;
         case Player::PlayState::Playing:
-            m_playPause->setIcon(Gui::iconFromTheme(Constants::Icons::Pause));
+            m_playPause->setIcon(Gui::iconFromTheme(Constants::Icons::Pause, palette()));
             break;
         case Player::PlayState::Paused:
-            m_playPause->setIcon(Gui::iconFromTheme(Constants::Icons::Play));
+            m_playPause->setIcon(Gui::iconFromTheme(Constants::Icons::Play, palette()));
             break;
     }
 }

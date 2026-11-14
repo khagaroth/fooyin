@@ -87,14 +87,14 @@ QString commandDescription(const QString& commandId)
     return {};
 }
 
-QIcon themeIcon(const QString& iconName)
+QIcon themeIcon(const QString& iconName, const QPalette& palette)
 {
     const QString trimmed = iconName.trimmed();
     if(trimmed.isEmpty()) {
         return {};
     }
 
-    const QIcon icon = Fooyin::Gui::iconFromTheme(trimmed);
+    const QIcon icon = Fooyin::Gui::iconFromTheme(trimmed, palette);
     return icon.isNull() ? QIcon{} : icon;
 }
 
@@ -204,7 +204,7 @@ const CommandButton::ConfigData& CommandButton::currentConfig() const
 
 QIcon CommandButton::previewIcon(const ConfigData& config) const
 {
-    QIcon configuredIcon = themeIcon(config.iconName);
+    QIcon configuredIcon = themeIcon(config.iconName, palette());
     if(configuredIcon.isNull()) {
         configuredIcon = customIcon(config.iconPath);
     }
@@ -299,6 +299,14 @@ void CommandButton::populateContextMenu(QMenu* menu)
     addConfigureAction(menu, false);
 }
 
+void CommandButton::changeEvent(QEvent* event)
+{
+    FyWidget::changeEvent(event);
+    if(event->type() == QEvent::PaletteChange) {
+        updateButton();
+    }
+}
+
 void CommandButton::contextMenuEvent(QContextMenuEvent* event)
 {
     showContextMenu(event->globalPos());
@@ -336,7 +344,7 @@ void CommandButton::rebindAction()
 
 void CommandButton::updateButton()
 {
-    QIcon configuredIcon              = themeIcon(m_config.iconName);
+    QIcon configuredIcon              = themeIcon(m_config.iconName, palette());
     const bool usingThemeIcon         = !configuredIcon.isNull();
     const bool themeIconRequested     = !m_config.iconName.isEmpty();
     const bool usingThemeIconFallback = themeIconRequested && configuredIcon.isNull();
@@ -420,8 +428,8 @@ QIcon CommandButton::customIcon(const QString& iconPath) const
 
 QIcon CommandButton::fallbackIcon(const QString& commandId) const
 {
-    const auto fallback = []() {
-        return Gui::iconFromTheme(Constants::Icons::Command);
+    const auto fallback = [this]() {
+        return Gui::iconFromTheme(Constants::Icons::Command, palette());
     };
 
     const auto resolved = ScriptCommandHandler::resolveCommand(commandId);
@@ -433,10 +441,10 @@ QIcon CommandButton::fallbackIcon(const QString& commandId) const
         return fallback();
     }
 
-    if(auto* command = m_actionManager->command(Id{resolved->id})) {
+    if(const auto* command = m_actionManager->command(Id{resolved->id})) {
         if(command->action() && !command->action()->icon().isNull()) {
             if(const QString iconName = Gui::themeIconName(command->action()); !iconName.isEmpty()) {
-                return Gui::iconFromTheme(iconName);
+                return Gui::iconFromTheme(iconName, palette());
             }
             return command->action()->icon();
         }
@@ -512,7 +520,7 @@ QString CommandButton::actionDescription(const QString& commandId) const
         return {};
     }
 
-    if(auto* command = m_actionManager->command(Id{resolved->id})) {
+    if(const auto* command = m_actionManager->command(Id{resolved->id})) {
         return command->description();
     }
 

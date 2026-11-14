@@ -51,6 +51,8 @@ enum class ApplicationIconOption : uint8_t
 
 /*! Sets the preferred bundled icon theme override and fallback theme. */
 FYGUI_EXPORT bool setThemeIconOverrides(const QString& primaryTheme, const QString& fallbackTheme);
+/*! Also controls whether bundled icons follow the palette supplied when loading an icon. */
+FYGUI_EXPORT bool setThemeIconOverrides(const QString& primaryTheme, const QString& fallbackTheme, bool followPalette);
 
 /*! Selects the application icon and optional custom file. */
 FYGUI_EXPORT void setApplicationIconOption(ApplicationIconOption option, const QString& customPath = {});
@@ -60,6 +62,10 @@ FYGUI_EXPORT QIcon applicationIcon();
 FYGUI_EXPORT QIcon iconFromTheme(const QString& icon);
 /*! Convenience overload for Latin-1 icon names. */
 FYGUI_EXPORT QIcon iconFromTheme(const char* icon);
+/*! Loads an icon using the local palette when automatic bundled icon selection is enabled. */
+FYGUI_EXPORT QIcon iconFromTheme(const QString& icon, const QPalette& palette);
+/*! Convenience overload for Latin-1 icon names. */
+FYGUI_EXPORT QIcon iconFromTheme(const char* icon, const QPalette& palette);
 /*! Returns the bundled action icon names available in fooyin's icon themes. */
 FYGUI_EXPORT QStringList availableThemeIcons();
 

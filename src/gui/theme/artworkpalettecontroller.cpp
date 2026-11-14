@@ -50,12 +50,14 @@ ArtworkColourMode colourMode(int value)
             return ArtworkColourMode::Accent;
         case static_cast<int>(ArtworkColourMode::Tonal):
             return ArtworkColourMode::Tonal;
+        case static_cast<int>(ArtworkColourMode::Adaptive):
+            return ArtworkColourMode::Adaptive;
         default:
             return ArtworkColourMode::Off;
     }
 }
 
-QColor artworkColour(const QImage& image)
+ArtworkColours artworkColours(const QImage& image)
 {
     struct Swatch
     {
@@ -67,6 +69,7 @@ QColor artworkColour(const QImage& image)
 
     std::array<Swatch, 512> swatches{};
     int samples{0};
+    double lightness{0.0};
     for(int y{0}; y < image.height(); ++y) {
         const auto* pixels = reinterpret_cast<const QRgb*>(image.constScanLine(y));
         for(int x{0}; x < image.width(); ++x) {
@@ -78,6 +81,8 @@ QColor artworkColour(const QImage& image)
             const int red   = qRed(pixel);
             const int green = qGreen(pixel);
             const int blue  = qBlue(pixel);
+
+            lightness += (std::max({red, green, blue}) + std::min({red, green, blue})) / (2.0 * 255.0);
 
             auto& swatch = swatches[((red >> 5) << 6) | ((green >> 5) << 3) | (blue >> 5)];
             ++swatch.count;
@@ -128,7 +133,7 @@ QColor artworkColour(const QImage& image)
         }
     }
 
-    return result;
+    return {.accent = result, .lightness = samples > 0 ? static_cast<float>(lightness / samples) : 0.0F};
 }
 
 double luminance(const QColor& colour)
@@ -331,7 +336,7 @@ ArtworkPaletteController::ArtworkPaletteController(CoverRepository* covers, Play
 
     settings->subscribe<Settings::Gui::Internal::ArtworkColours>(this, [this](int value) {
         m_mode = colourMode(value);
-        if(m_mode != ArtworkColourMode::Off && m_colour.isValid()) {
+        if(m_mode != ArtworkColourMode::Off && m_colours.accent.isValid()) {
             Q_EMIT paletteChanged();
         }
         else {
@@ -348,26 +353,51 @@ ArtworkPaletteController::ArtworkPaletteController(CoverRepository* covers, Play
 QPalette ArtworkPaletteController::palette(const QPalette& base) const
 {
     const auto* style = QApplication::style();
-    if(m_mode == ArtworkColourMode::Off || !m_colour.isValid() || !style
+    if(m_mode == ArtworkColourMode::Off || !m_colours.accent.isValid() || !style
        || !Gui::styleSupportsCustomPalette(style->name())) {
         return base;
     }
 
     auto palette{base};
-    const float hue = std::max(0.0F, m_colour.hslHueF());
+    const auto& colour          = m_colours.accent;
+    const float hue             = std::max(0.0F, colour.hslHueF());
+    const bool adaptive         = m_mode == ArtworkColourMode::Adaptive;
+    const float targetLightness = m_colours.lightness < 0.5F
+                                    ? std::lerp(0.16F, 0.32F, m_colours.lightness * 2.0F)
+                                    : std::lerp(0.72F, 0.90F, (m_colours.lightness - 0.5F) * 2.0F);
 
     for(const auto group : {QPalette::Active, QPalette::Inactive, QPalette::Disabled}) {
-        if(m_mode == ArtworkColourMode::Tonal) {
+        if(m_mode == ArtworkColourMode::Tonal || adaptive) {
             for(const auto role :
                 {QPalette::Window, QPalette::Base, QPalette::AlternateBase, QPalette::Button, QPalette::ToolTipBase,
                  QPalette::Light, QPalette::Midlight, QPalette::Mid, QPalette::Dark, QPalette::Shadow}) {
                 const auto original = base.color(group, role);
+                float lightness{original.lightnessF()};
+                if(adaptive) {
+                    const float window = base.color(group, QPalette::Window).lightnessF();
+                    float offset       = std::clamp(lightness - window, -0.08F, 0.08F);
+                    if((role == QPalette::Base || role == QPalette::AlternateBase)
+                       && (window < 0.5F) != (targetLightness < 0.5F)) {
+                        offset = -offset;
+                    }
+                    lightness = std::clamp(targetLightness + offset, 0.06F, 0.98F);
+                }
                 palette.setColor(group, role,
-                                 QColor::fromHslF(hue, std::min(0.16F, m_colour.hslSaturationF() * 0.25F),
-                                                  original.lightnessF(), original.alphaF()));
+                                 QColor::fromHslF(hue, std::min(0.16F, colour.hslSaturationF() * 0.25F), lightness,
+                                                  original.alphaF()));
             }
 
-            if(group != QPalette::Disabled) {
+            if(adaptive) {
+                for(const auto role : {QPalette::WindowText, QPalette::ButtonText, QPalette::ToolTipText,
+                                       QPalette::Text, QPalette::PlaceholderText, QPalette::HighlightedText}) {
+                    auto foreground = base.color(group, role);
+                    foreground.setAlpha(255);
+                    palette.setColor(group, role, foreground);
+                }
+            }
+
+            if(group != QPalette::Disabled || adaptive) {
+                const double contrast = group == QPalette::Disabled ? 3.0 : 4.5;
                 for(const auto& [foreground, background] : {
                         std::pair{QPalette::WindowText, QPalette::Window},
                         std::pair{QPalette::ButtonText, QPalette::Button},
@@ -375,16 +405,16 @@ QPalette ArtworkPaletteController::palette(const QPalette& base) const
                     }) {
                     palette.setColor(
                         group, foreground,
-                        readableColour(base.color(group, foreground), {palette.color(group, background)}, 4.5));
+                        readableColour(palette.color(group, foreground), {palette.color(group, background)}, contrast));
                 }
                 palette.setColor(group, QPalette::Text,
-                                 readableColour(base.color(group, QPalette::Text),
+                                 readableColour(palette.color(group, QPalette::Text),
                                                 {palette.color(group, QPalette::Base),
                                                  palette.color(group, QPalette::AlternateBase)},
-                                                4.5));
+                                                contrast));
                 palette.setColor(group, QPalette::PlaceholderText,
-                                 readableColour(base.color(group, QPalette::PlaceholderText),
-                                                {palette.color(group, QPalette::Base)}, 4.5));
+                                 readableColour(palette.color(group, QPalette::PlaceholderText),
+                                                {palette.color(group, QPalette::Base)}, contrast));
             }
         }
 
@@ -392,12 +422,12 @@ QPalette ArtworkPaletteController::palette(const QPalette& base) const
         const auto surface   = palette.color(group, QPalette::Base);
         const auto alternate = palette.color(group, QPalette::AlternateBase);
 
-        auto highlight = readableColour(m_colour, {window, surface, alternate}, 3.0);
+        auto highlight = readableColour(colour, {window, surface, alternate}, 3.0);
         if(group == QPalette::Disabled) {
             highlight = mix(highlight, window, 0.6);
             palette.setColor(group, QPalette::Highlight, highlight);
             palette.setColor(group, QPalette::HighlightedText,
-                             readableColour(base.color(group, QPalette::HighlightedText), {highlight}, 4.5));
+                             readableColour(palette.color(group, QPalette::HighlightedText), {highlight}, 4.5));
         }
         else {
             setSelectionColours(style, base, palette, group, highlight);
@@ -405,8 +435,8 @@ QPalette ArtworkPaletteController::palette(const QPalette& base) const
 #if QT_VERSION >= QT_VERSION_CHECK(6, 6, 0)
         palette.setColor(group, QPalette::Accent, palette.color(group, QPalette::Highlight));
 #endif
-        palette.setColor(group, QPalette::Link, readableColour(m_colour, {window, surface, alternate}, 4.5));
-        const auto visited = QColor::fromHslF(hue, m_colour.hslSaturationF() * 0.7F, m_colour.lightnessF());
+        palette.setColor(group, QPalette::Link, readableColour(colour, {window, surface, alternate}, 4.5));
+        const auto visited = QColor::fromHslF(hue, colour.hslSaturationF() * 0.7F, colour.lightnessF());
         palette.setColor(group, QPalette::LinkVisited, readableColour(visited, {window, surface, alternate}, 4.5));
     }
     return palette;
@@ -418,7 +448,7 @@ void ArtworkPaletteController::reloadCover()
 
     const auto track = m_player->currentTrack();
     if(m_mode == ArtworkColourMode::Off || m_player->playState() == Player::PlayState::Stopped || !track.isValid()) {
-        setColour({});
+        setColours({});
         return;
     }
 
@@ -427,7 +457,7 @@ void ArtworkPaletteController::reloadCover()
             return;
         }
         if(cover.isNull()) {
-            setColour({});
+            setColours({});
             return;
         }
 
@@ -438,13 +468,13 @@ void ArtworkPaletteController::reloadCover()
             QByteArrayView{reinterpret_cast<const char*>(image.constBits()), image.sizeInBytes()},
             QCryptographicHash::Sha256);
         if(const auto it = m_colourCache.find(key); it != m_colourCache.end()) {
-            setColour(it->second);
+            setColours(it->second);
             return;
         }
 
         Utils::asyncExec([image]() {
-            return artworkColour(image);
-        }).then(this, [this, requestId, key](const QColor& colour) {
+            return artworkColours(image);
+        }).then(this, [this, requestId, key](const ArtworkColours& colours) {
             if(requestId != m_requestId) {
                 return;
             }
@@ -452,15 +482,15 @@ void ArtworkPaletteController::reloadCover()
             if(m_colourCache.size() >= 64) {
                 m_colourCache.clear();
             }
-            m_colourCache.emplace(key, colour);
-            setColour(colour);
+            m_colourCache.emplace(key, colours);
+            setColours(colours);
         });
     });
 }
 
-void ArtworkPaletteController::setColour(const QColor& colour)
+void ArtworkPaletteController::setColours(const ArtworkColours& colours)
 {
-    if(std::exchange(m_colour, colour) != colour) {
+    if(std::exchange(m_colours, colours) != colours) {
         Q_EMIT paletteChanged();
     }
 }

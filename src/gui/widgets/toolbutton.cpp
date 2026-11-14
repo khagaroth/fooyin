@@ -20,8 +20,11 @@
 #include <gui/widgets/toolbutton.h>
 
 #include <gui/guisettings.h>
+#include <gui/iconloader.h>
 #include <utils/settings/settingsmanager.h>
 
+#include <QAction>
+#include <QActionEvent>
 #include <QStyleOptionToolButton>
 #include <QStylePainter>
 
@@ -80,6 +83,16 @@ void ToolButton::setMinimumIconSize(int size)
 void ToolButton::setMaximumIconSize(int size)
 {
     m_maximumSize = size;
+}
+
+void ToolButton::actionEvent(QActionEvent* event)
+{
+    QToolButton::actionEvent(event);
+    if(const auto* action = defaultAction(); action && action->icon().cacheKey() == icon().cacheKey()) {
+        if(const auto name = Gui::themeIconName(action); !name.isEmpty()) {
+            setIcon(Gui::iconFromTheme(name, palette()));
+        }
+    }
 }
 
 void ToolButton::enterEvent(QEnterEvent* event)

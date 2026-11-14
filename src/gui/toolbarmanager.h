@@ -84,6 +84,7 @@ private:
     void setToolbarsLocked(bool locked);
 
     void updateMenuVisibility();
+    void updateToolbarPalette(QToolBar* toolbar);
 
     void addToolbar(const QString& key, const QString& id = {}, const QJsonObject& layout = {});
     QToolBar* createToolbar(const QString& title, const QString& id);

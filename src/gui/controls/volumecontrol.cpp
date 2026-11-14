@@ -316,16 +316,16 @@ void VolumeControlPrivate::updateDisplay(double volume) const
     }
 
     if(volume <= 1.0 && volume >= 0.40) {
-        m_volumeIcon->setIcon(Gui::iconFromTheme(Constants::Icons::VolumeHigh));
+        m_volumeIcon->setIcon(Gui::iconFromTheme(Constants::Icons::VolumeHigh, m_self->palette()));
     }
     else if(volume < 0.40 && volume >= 0.20) {
-        m_volumeIcon->setIcon(Gui::iconFromTheme(Constants::Icons::VolumeMed));
+        m_volumeIcon->setIcon(Gui::iconFromTheme(Constants::Icons::VolumeMed, m_self->palette()));
     }
     else if(volume < 0.20 && volume > 0.0) {
-        m_volumeIcon->setIcon(Gui::iconFromTheme(Constants::Icons::VolumeLow));
+        m_volumeIcon->setIcon(Gui::iconFromTheme(Constants::Icons::VolumeLow, m_self->palette()));
     }
     else {
-        m_volumeIcon->setIcon(Gui::iconFromTheme(Constants::Icons::VolumeMute));
+        m_volumeIcon->setIcon(Gui::iconFromTheme(Constants::Icons::VolumeMute, m_self->palette()));
     }
 }
 
@@ -573,6 +573,14 @@ void VolumeControl::populateContextMenu(QMenu* menu)
     menu->addSeparator();
     menu->addMenu(curveMenu);
     menu->addMenu(orientationMenu);
+}
+
+void VolumeControl::changeEvent(QEvent* event)
+{
+    FyWidget::changeEvent(event);
+    if(event->type() == QEvent::PaletteChange) {
+        p->updateDisplay(p->m_settings->value<Settings::Core::OutputVolume>());
+    }
 }
 
 void VolumeControl::contextMenuEvent(QContextMenuEvent* event)

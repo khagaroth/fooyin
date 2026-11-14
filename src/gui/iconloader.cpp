@@ -47,6 +47,7 @@ struct IconThemeState
 {
     QString primaryTheme;
     QString fallbackTheme;
+    bool followPalette{false};
 };
 
 struct ApplicationIconState
@@ -93,16 +94,18 @@ class IconLoader
 public:
     IconLoader() = delete;
 
-    static bool setThemeOverrides(const QString& primaryTheme, const QString& fallbackTheme)
+    static bool setThemeOverrides(const QString& primaryTheme, const QString& fallbackTheme, bool followPalette)
     {
         auto& state = iconThemeState();
 
-        if(state.primaryTheme == primaryTheme && state.fallbackTheme == fallbackTheme) {
+        if(state.primaryTheme == primaryTheme && state.fallbackTheme == fallbackTheme
+           && state.followPalette == followPalette) {
             return false;
         }
 
         state.primaryTheme  = primaryTheme;
         state.fallbackTheme = fallbackTheme;
+        state.followPalette = followPalette;
         return true;
     }
 
@@ -148,7 +151,12 @@ void setApplicationIconOption(ApplicationIconOption option, const QString& custo
 
 bool setThemeIconOverrides(const QString& primaryTheme, const QString& fallbackTheme)
 {
-    return IconLoader::setThemeOverrides(primaryTheme, fallbackTheme);
+    return setThemeIconOverrides(primaryTheme, fallbackTheme, false);
+}
+
+bool setThemeIconOverrides(const QString& primaryTheme, const QString& fallbackTheme, bool followPalette)
+{
+    return IconLoader::setThemeOverrides(primaryTheme, fallbackTheme, followPalette);
 }
 
 QIcon applicationIcon()
@@ -177,6 +185,25 @@ QIcon iconFromTheme(const QString& icon)
 QIcon iconFromTheme(const char* icon)
 {
     return iconFromTheme(QString::fromLatin1(icon));
+}
+
+QIcon iconFromTheme(const QString& icon, const QPalette& palette)
+{
+    if(iconThemeState().followPalette) {
+        const bool dark      = palette.color(QPalette::Active, QPalette::WindowText).value()
+                             > palette.color(QPalette::Active, QPalette::Window).value();
+        const auto localIcon = iconFromResourceTheme(
+            QString::fromLatin1(dark ? Constants::DarkIconTheme : Constants::LightIconTheme), icon);
+        if(!localIcon.isNull()) {
+            return localIcon;
+        }
+    }
+    return iconFromTheme(icon);
+}
+
+QIcon iconFromTheme(const char* icon, const QPalette& palette)
+{
+    return iconFromTheme(QString::fromLatin1(icon), palette);
 }
 
 QStringList availableThemeIcons()
@@ -220,7 +247,7 @@ void setThemeIcon(QAbstractButton* button, const QString& icon)
     }
 
     button->setProperty(ThemeIconNameProperty, icon);
-    button->setIcon(iconFromTheme(icon));
+    button->setIcon(iconFromTheme(icon, button->palette()));
 }
 
 void setThemeIcon(QAbstractButton* button, const char* icon)
@@ -270,7 +297,7 @@ void refreshThemeIcons(QObject* object)
     for(QAbstractButton* button : buttons) {
         const QString iconName = button->property(ThemeIconNameProperty).toString();
         if(!iconName.isEmpty()) {
-            button->setIcon(iconFromTheme(iconName));
+            button->setIcon(iconFromTheme(iconName, button->palette()));
         }
     }
 }

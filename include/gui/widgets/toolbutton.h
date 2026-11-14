@@ -45,6 +45,7 @@ Q_SIGNALS:
     void entered();
 
 protected:
+    void actionEvent(QActionEvent* event) override;
     void enterEvent(QEnterEvent* event) override;
     void paintEvent(QPaintEvent* event) override;
 

@@ -68,6 +68,7 @@ private:
 
     QButtonGroup* m_artworkColourModes;
     QLabel* m_artworkColourHint;
+    QLabel* m_artworkStyleHint;
 
     ScriptLineEdit* m_thumbnailGroupScript;
     QSpinBox* m_pixmapCache;
@@ -82,6 +83,10 @@ ArtworkPageWidget::ArtworkPageWidget(SettingsManager* settings, CoverRepository*
     , m_preferEmbedded{new QRadioButton(tr("Prefer embedded artwork"), this)}
     , m_artworkColourModes{new QButtonGroup(this)}
     , m_artworkColourHint{new HintLabel(this)}
+    , m_artworkStyleHint{new HintLabel(
+          tr("Some styles may not fully support artwork colours. Select Fusion in Interface → General for more "
+             "consistent results."),
+          this)}
     , m_thumbnailGroupScript{new ScriptLineEdit(this)}
     , m_pixmapCache{new QSpinBox(this)}
     , m_coverFlowCache{new QSpinBox(this)}
@@ -99,30 +104,35 @@ ArtworkPageWidget::ArtworkPageWidget(SettingsManager* settings, CoverRepository*
 
     auto* artworkColoursGroupBox = new QGroupBox(tr("Artwork colours"), this);
     auto* artworkColoursLayout   = new QVBoxLayout(artworkColoursGroupBox);
-    auto* offMode                = new QRadioButton(tr("&Off"), artworkColoursGroupBox);
-    auto* accentMode             = new QRadioButton(tr("&Accent"), artworkColoursGroupBox);
-    auto* tonalMode              = new QRadioButton(tr("&Tonal"), artworkColoursGroupBox);
+
+    auto* offMode      = new QRadioButton(tr("&Off"), artworkColoursGroupBox);
+    auto* accentMode   = new QRadioButton(tr("&Accent"), artworkColoursGroupBox);
+    auto* tonalMode    = new QRadioButton(tr("&Tonal"), artworkColoursGroupBox);
+    auto* adaptiveMode = new QRadioButton(tr("A&daptive"), artworkColoursGroupBox);
 
     m_artworkColourModes->addButton(offMode, static_cast<int>(ArtworkColourMode::Off));
     m_artworkColourModes->addButton(accentMode, static_cast<int>(ArtworkColourMode::Accent));
     m_artworkColourModes->addButton(tonalMode, static_cast<int>(ArtworkColourMode::Tonal));
+    m_artworkColourModes->addButton(adaptiveMode, static_cast<int>(ArtworkColourMode::Adaptive));
+
     offMode->setChecked(true);
     offMode->setToolTip(tr("Off uses the selected theme’s colours."));
     accentMode->setToolTip(tr("Accent changes highlights and links."));
     tonalMode->setToolTip(tr("Tonal changes highlights and links, and tints backgrounds."));
+    adaptiveMode->setToolTip(tr("Adaptive changes highlights and links, and adjusts background colour and lightness "
+                                "to suit the artwork."));
     m_artworkColourHint->setWordWrap(true);
 
     artworkColoursLayout->addWidget(offMode);
     artworkColoursLayout->addWidget(accentMode);
     artworkColoursLayout->addWidget(tonalMode);
+    artworkColoursLayout->addWidget(adaptiveMode);
     artworkColoursLayout->addWidget(m_artworkColourHint);
-
-    QWidget::setTabOrder(m_preferEmbedded, offMode);
-    QWidget::setTabOrder(offMode, accentMode);
-    QWidget::setTabOrder(accentMode, tonalMode);
-    QWidget::setTabOrder(tonalMode, m_thumbnailGroupScript);
+    artworkColoursLayout->addWidget(m_artworkStyleHint);
 
     m_settings->subscribe<Settings::Gui::Style>(this, &ArtworkPageWidget::updateArtworkColourOptions);
+    QObject::connect(m_artworkColourModes, &QButtonGroup::idToggled, this,
+                     &ArtworkPageWidget::updateArtworkColourOptions);
 
     auto* thumbnailsGroupBox = new QGroupBox(tr("Thumbnails"), this);
     auto* thumbnailsLayout   = new QGridLayout(thumbnailsGroupBox);
@@ -238,10 +248,14 @@ void ArtworkPageWidget::updateArtworkColourOptions()
     for(auto* button : m_artworkColourModes->buttons()) {
         button->setEnabled(supported);
     }
+
     m_artworkColourHint->setText(
         supported ? tr("The selected theme supplies the base appearance and is restored when playback stops or "
                        "artwork is missing.")
                   : tr("Artwork colours are only supported with the Fusion style on Windows."));
+    m_artworkStyleHint->setVisible(supported
+                                   && m_artworkColourModes->checkedId() == static_cast<int>(ArtworkColourMode::Adaptive)
+                                   && styleName.compare("Fusion"_L1, Qt::CaseInsensitive) != 0);
 }
 
 void ArtworkPageWidget::updateCacheSize()
